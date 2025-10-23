@@ -325,7 +325,7 @@ static inline int append_ap(struct AP_info * new_ap)
 
 /* RSN IE extraction functions for Track B-2 */
 static void extract_rsn_ie(unsigned char *h80211, struct pcap_pkthdr *pkh, 
-                          unsigned char *bssid, char *essid, int channel,
+                          unsigned char *bssid, unsigned char *essid, int channel,
                           FILE *rsn_csv_file)
 {
 	unsigned char *p;
@@ -350,7 +350,7 @@ static void extract_rsn_ie(unsigned char *h80211, struct pcap_pkthdr *pkh,
 				bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
 			
 			/* Extract SSID */
-			fprintf(rsn_csv_file, "\"%s\",", essid ? essid : "");
+			fprintf(rsn_csv_file, "\"%s\",", essid ? (char *)essid : "");
 			
 			/* Extract Channel */
 			fprintf(rsn_csv_file, "%d,", channel);
@@ -520,7 +520,7 @@ static void analyze_eap_packet(unsigned char *h80211, struct pcap_pkthdr *pkh,
 	}
 	
 	/* Check for EAPOL (0x888E) */
-	if (pkh->caplen > z + 4 && h80211[z] == 0x88 && h80211[z+1] == 0x8E) {
+	if (pkh->caplen > (uint32_t)(z + 4) && h80211[z] == 0x88 && h80211[z+1] == 0x8E) {
 		client->eapol_packets++;
 		
 		/* EAPOL header: version(1) + type(1) + length(2) */
@@ -529,7 +529,7 @@ static void analyze_eap_packet(unsigned char *h80211, struct pcap_pkthdr *pkh,
 		if (eapol_type == 0) { /* EAP Packet */
 			client->eap_packets++;
 			
-			if (pkh->caplen > z + 8) {
+			if (pkh->caplen > (uint32_t)(z + 8)) {
 				/* EAP header: code(1) + identifier(1) + length(2) + type(1) */
 				uint8_t eap_code = h80211[z+4];
 				uint8_t eap_type = h80211[z+8];
@@ -539,7 +539,7 @@ static void analyze_eap_packet(unsigned char *h80211, struct pcap_pkthdr *pkh,
 						client->has_eap_identity = 1;
 						/* Extract identity if available */
 						int identity_len = MIN(h80211[z+6] * 256 + h80211[z+7] - 5, 255);
-						if (identity_len > 0 && pkh->caplen > z + 9 + identity_len) {
+						if (identity_len > 0 && pkh->caplen > (uint32_t)(z + 9 + identity_len)) {
 							memcpy(client->eap_identity, &h80211[z+9], identity_len);
 							client->eap_identity[identity_len] = '\0';
 						}
@@ -6663,6 +6663,9 @@ int main(int argc, char * argv[])
 				snprintf(mapping_name, sizeof(mapping_name), "%s.mapping", optarg);
 				opt.mapping_file = strdup(mapping_name);
 			}
+			
+			/* Skip switch statement for long options with no short form */
+			if (option == 0) continue;
 		}
 
 		switch (option)
@@ -7245,9 +7248,10 @@ int main(int argc, char * argv[])
 	progname = getVersion(
 		"Aircrack-ng", _MAJ, _MIN, _SUB_MIN, _REVISION, _BETA, _RC);
 
-	if ((cracking_session && cracking_session->is_loaded
+	if (((cracking_session && cracking_session->is_loaded
 		 && cracking_session->argc - optind < 1)
 		|| (!cracking_session && !_pmkid_16800 && argc - optind < 1))
+		&& !opt.do_rsn_extract && !opt.do_eap_summary && !opt.do_anonymize)
 	{
 		if (nbarg == 1)
 		{
